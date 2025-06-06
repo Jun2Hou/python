@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        repo: ['langgenius/dify', 'langchain-ai/langgraph-supervisor-py']
+        repo: ['langgenius/dify','langchain-ai/langgraph-supervisor-py','google-a2a/A2A','infiniflow/ragflow']
     name: Monitor ${{ matrix.repo }}
     
     steps:
