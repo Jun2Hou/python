@@ -98,7 +98,7 @@ jobs:
         git config user.email "actions@github.com"
         
         # 6. 添加和提交更改
-        FILE_NAME="monitoring/version_history_$repo_safe.json"
+        FILE_NAME="version_history_$repo_safe.json"
         git add "$FILE_NAME"
         git commit -m "Update $TARGET_REPO to $NEW_VERSION"
         
