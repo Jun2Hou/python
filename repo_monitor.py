@@ -3,18 +3,24 @@ import json
 import requests
 import sys
 from datetime import datetime
+import logging
+
+# 设置日志记录（只输出错误信息）
+logging.basicConfig(level=logging.ERROR, stream=sys.stderr)
 
 # 从命令行参数获取安全仓库名称
 if len(sys.argv) > 1:
     safe_repo_name = sys.argv[1]
 else:
     safe_repo_name = "default"
+    
 target_repo = os.environ['TARGET_REPO']
 token = os.environ.get('GITHUB_TOKEN')
+logger = logging.getLogger(__name__)
 
 # 为每个仓库创建单独的文件
-VERSION_FILE = f"monitoring/version_history_{safe_repo_name}.json"
-MONITORING_DIR = "monitoring"
+VERSION_FILE = f"version_history_{safe_repo_name}.json"
+MONITORING_DIR = "."
 
 def ensure_dir_exists():
     """确保监控目录存在"""
@@ -34,7 +40,7 @@ def get_latest_release():
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching release: {e}")
+        logger.error(f"Error fetching release: {e}")
         return None
 
 def load_current_version():
@@ -46,9 +52,9 @@ def load_current_version():
         try:
             with open(file_path, 'r') as f:
                 data = json.load(f)
-                return data['current_version']
-        except (KeyError, json.JSONDecodeError):
-            pass
+                return data.get('current_version', "v0.0.0")
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f"Error reading version file: {e}")
     
     # 首次运行初始化文件
     init_data = {
@@ -56,8 +62,11 @@ def load_current_version():
         "last_checked": datetime.utcnow().isoformat(),
         "version_history": []
     }
-    with open(file_path, 'w') as f:
-        json.dump(init_data, f, indent=2)
+    try:
+        with open(file_path, 'w') as f:
+            json.dump(init_data, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error creating version file: {e}")
     
     return "v0.0.0"
 
@@ -68,9 +77,17 @@ def update_version(new_version, release_info):
     
     # 加载或初始化数据
     try:
-        with open(file_path, 'r') as f:
-            data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+        else:
+            data = {
+                "current_version": "v0.0.0",
+                "last_checked": datetime.utcnow().isoformat(),
+                "version_history": []
+            }
+    except Exception as e:
+        logger.error(f"Error loading version data: {e}")
         data = {
             "current_version": "v0.0.0",
             "last_checked": datetime.utcnow().isoformat(),
@@ -91,13 +108,16 @@ def update_version(new_version, release_info):
     # 更新数据
     data['current_version'] = new_version
     data['last_checked'] = datetime.utcnow().isoformat()
-    data['version_history'].append(new_entry)
+    data['version_history'].insert(0, new_entry)  # 插入到开头
     
     # 保存文件
-    with open(file_path, 'w') as f:
-        json.dump(data, f, indent=2)
-    
-    print(f"Updated version history for {target_repo} to {new_version}")
+    try:
+        with open(file_path, 'w') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving version file: {e}")
+        return False
 
 def main():
     # 确保目录存在
@@ -110,30 +130,27 @@ def main():
     latest_release = get_latest_release()
     
     if not latest_release:
-        print(f"Failed to fetch release information for {target_repo}")
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-            f.write('has_update=false\n')
-        return
+        # 错误时输出空字符串
+        print("")
+        return 1
     
     latest_version = latest_release['tag_name']
     
-    print(f"[{target_repo}] Current: {current_version}, Latest: {latest_version}")
-    
     # 检查版本变化
     if current_version != latest_version:
-        print(f"New version detected for {target_repo}: {latest_version}")
-        
         # 更新版本文件
-        update_version(latest_version, latest_release)
-        
-        # 设置输出
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-            f.write(f'has_update=true\n')
-            f.write(f'new_version={latest_version}\n')
+        if update_version(latest_version, latest_release):
+            # 成功更新时输出版本号（只包含版本号）
+            print(latest_version)
+            return 0
+        else:
+            # 文件更新失败时输出空字符串
+            print("")
+            return 1
     else:
-        print(f"No new version for {target_repo}")
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-            f.write('has_update=false\n')
+        # 没有新版本时输出空字符串
+        print("")
+        return 0
 
 if __name__ == "__main__":
-    main()
+    exit(main())
