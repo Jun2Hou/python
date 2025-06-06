@@ -70,20 +70,15 @@ jobs:
           git remote set-head origin -a
         fi
         
-        # 2. 确定实际分支名称
-        ACTUAL_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-
-        if [ -z "$ACTUAL_BRANCH" ]; then
-          echo "Failed to determine default branch, using fallback..."
-          ACTUAL_BRANCH=$(git remote show origin | grep 'HEAD branch' | awk '{print $NF}')
-        fi
+        # Determine the actual default branch name
+        ACTUAL_BRANCH=$(git remote show origin | grep 'HEAD branch:' | awk '{print $NF}')
         
         if [ -z "$ACTUAL_BRANCH" ]; then
-          echo "Warning: still failed, using main as default"
+          echo "Failed to determine default branch. Using 'main' as fallback..."
           ACTUAL_BRANCH="main"
         fi
         
-        echo "Default branch: $ACTUAL_BRANCH"
+        echo "Default branch determined: $ACTUAL_BRANCH"
         
         # 3. 更新工作区
         git fetch --all
