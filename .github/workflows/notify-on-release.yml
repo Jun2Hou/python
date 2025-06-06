@@ -60,22 +60,25 @@ jobs:
         # Ensure remote HEAD is set
         git remote set-head origin -a
     
+        # Determine the default branch
         ACTUAL_BRANCH=$(git remote show origin | grep 'HEAD branch:' | awk '{print $NF}')
         if [ -z "$ACTUAL_BRANCH" ]; then
           echo "Failed to determine default branch. Using 'main' as fallback..."
           ACTUAL_BRANCH="main"
         fi
         
-        # Validate branch existence and fallback to 'main' if not found
+        # Validate branch existence
         if ! git branch -r | grep -q "origin/$ACTUAL_BRANCH"; then
           echo "Error: Default branch $ACTUAL_BRANCH does not exist. Falling back to 'main'."
           ACTUAL_BRANCH="main"
-          git branch -r | grep -q "origin/$ACTUAL_BRANCH" || { echo "Error: Branch 'main' also does not exist."; exit 1; }
+          if ! git branch -r | grep -q "origin/$ACTUAL_BRANCH"; then
+            echo "Error: Branch 'main' also does not exist."
+            exit 1
+          fi
         fi
-    
+        
         # Switch to the default branch
-        git checkout "$ACTUAL_BRANCH"
-        if [ $? -ne 0 ]; then
+        if ! git checkout "$ACTUAL_BRANCH"; then
           echo "Error: Failed to switch to branch $ACTUAL_BRANCH"
           exit 1
         fi
