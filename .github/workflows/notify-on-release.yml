@@ -55,22 +55,27 @@ jobs:
         # 生成安全的文件名
         repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
         
-        # 调用监控脚本并提取版本号
-        output=$(python repo_monitor.py "$repo_safe" 2>&1)
+        # 调用监控脚本 - 只捕获标准输出（忽略标准错误）
+        new_version=$(python repo_monitor.py "$repo_safe" 2>/dev/null)
         
-        # 提取版本号
-        if [[ "$output" == *"New version detected"* ]]; then
-          # 提取最后一段版本号（分割冒号后的部分）
-          new_version=$(echo "$output" | awk -F': ' '{print $NF}')
-          echo "检测到新版本: $new_version"
-          echo "repo_safe=$repo_safe" >> $GITHUB_OUTPUT
-          echo "new_version=$new_version" >> $GITHUB_OUTPUT
-          echo "has_update=true" >> $GITHUB_OUTPUT
+        # 调试：显示获取的版本号
+        echo "提取的版本号: '$new_version'"
+        
+        # 判断是否检测到新版本
+        if [[ -n "$new_version" && "$new_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "✅ 检测到新版本: $new_version"
+            echo "repo_safe=$repo_safe" >> $GITHUB_OUTPUT
+            echo "new_version=$new_version" >> $GITHUB_OUTPUT
+            echo "has_update=true" >> $GITHUB_OUTPUT
         else
-          echo "没有检测到新版本"
-          echo "repo_safe=$repo_safe" >> $GITHUB_OUTPUT
-          echo "new_version=" >> $GITHUB_OUTPUT
-          echo "has_update=false" >> $GITHUB_OUTPUT
+            if [[ -n "$new_version" ]]; then
+                echo "⚠️ 无效版本格式: '$new_version'"
+            else
+                echo "ℹ️ 没有检测到新版本"
+            fi
+            echo "repo_safe=$repo_safe" >> $GITHUB_OUTPUT
+            echo "new_version=" >> $GITHUB_OUTPUT
+            echo "has_update=false" >> $GITHUB_OUTPUT
         fi
         
     # 处理版本更新
