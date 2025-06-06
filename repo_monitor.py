@@ -5,7 +5,10 @@ import sys
 from datetime import datetime
 
 # 从命令行参数获取安全仓库名称
-safe_repo_name = sys.argv[1] if len(sys.argv) > 1 else "default"
+if len(sys.argv) > 1:
+    safe_repo_name = sys.argv[1]
+else:
+    safe_repo_name = "default"
 target_repo = os.environ['TARGET_REPO']
 token = os.environ.get('GITHUB_TOKEN')
 
