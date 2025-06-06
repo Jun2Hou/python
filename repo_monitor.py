@@ -24,43 +24,53 @@ def get_latest_release():
         return None
 
 def load_current_version():
-    """从文件加载当前版本"""
+    """从文件加载当前版本（避免使用环境变量）"""
     try:
         with open('version_history.json', 'r') as f:
             data = json.load(f)
             return data['current_version']
     except (FileNotFoundError, KeyError, json.JSONDecodeError):
-        # 第一次运行，创建新文件
-        initial_data = {
-            "current_version": "v0.0.0",
-            "last_checked": datetime.utcnow().isoformat(),
-            "version_history": []
-        }
-        with open('version_history.json', 'w') as f:
-            json.dump(initial_data, f, indent=2)
-        return "v0.0.0"
+        return "v0.0.0"  # 默认初始版本
 
-def update_version(new_version):
-    """更新版本记录文件"""
+def update_version(new_version, release_info):
+    """更新版本记录文件（仅在工作流脚本中调用）"""
     try:
-        with open('version_history.json', 'r') as f:
-            data = json.load(f)
-            
-        # 记录更新历史
-        data['version_history'].append({
-            "version": new_version,
-            "detected": datetime.utcnow().isoformat()
-        })
+        # 读取当前数据
+        try:
+            with open('version_history.json', 'r') as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = {
+                "current_version": "v0.0.0",
+                "last_checked": datetime.utcnow().isoformat(),
+                "version_history": []
+            }
         
-        # 更新当前版本
+        # 添加新记录
+        new_entry = {
+            "version": new_version,
+            "detected": datetime.utcnow().isoformat(),
+            "release_info": {
+                "url": release_info['html_url'],
+                "name": release_info.get('name', ''),
+                "published_at": release_info['published_at']
+            }
+        }
+        
+        # 更新主记录
         data['current_version'] = new_version
         data['last_checked'] = datetime.utcnow().isoformat()
+        data['version_history'].append(new_entry)
         
+        # 保存文件
         with open('version_history.json', 'w') as f:
             json.dump(data, f, indent=2)
             
+        print(f"Updated version history to {new_version}")
+        
     except Exception as e:
         print(f"Error updating version file: {e}")
+        raise
 
 def main():
     # 获取当前存储的版本
@@ -71,7 +81,6 @@ def main():
     
     if not latest_release:
         print("Failed to fetch release information")
-        # 设置输出
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write('has_update=false\n')
         return
@@ -80,12 +89,14 @@ def main():
     
     print(f"Current version: {current_version}, Latest version: {latest_version}")
     
-    # 如果是首次运行或版本不同
+    # 检查版本变化
     if current_version != latest_version:
         print(f"New version detected: {latest_version}")
-        update_version(latest_version)
         
-        # 设置输出 (使用新的环境文件方式)
+        # 更新版本文件（不提交，由工作流处理）
+        update_version(latest_version, latest_release)
+        
+        # 设置输出
         with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
             f.write(f'has_update=true\n')
             f.write(f'new_version={latest_version}\n')
