@@ -1,4 +1,4 @@
-name: External Repo Monitor
+name: Multi-Repo Version Monitor
 
 on:
   schedule:
@@ -11,15 +11,13 @@ jobs:
     strategy:
       matrix:
         repo: ['langgenius/dify', 'langchain-ai/langgraph-supervisor-py']
-    outputs:
-      has_update_${{ matrix.repo }}: ${{ steps.check.outputs.has_update }}
-      new_version_${{ matrix.repo }}: ${{ steps.check.outputs.new_version }}
+    name: Monitor ${{ matrix.repo }}
     
     steps:
     - name: Checkout with token
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.PERSONAL_TOKEN }}
         fetch-depth: 0 # 获取完整历史
       
     - name: Setup Python
@@ -31,11 +29,19 @@ jobs:
       run: |
         pip install requests pygithub
         sudo apt-get update && sudo apt-get install -y jq
-        gh --version || sudo apt-get install -y gh
         
     - name: Configure GitHub CLI
       run: |
-        gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+        # 安装 GitHub CLI（如果尚未安装）
+        if ! command -v gh &> /dev/null; then
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+        fi
+        
+        # 使用个人令牌登录
+        echo ${{ secrets.PERSONAL_TOKEN }} | gh auth login --with-token
         gh config set prompt disabled
         
     - name: Check for updates
@@ -45,15 +51,18 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # 生成安全的文件名
-        repo_safe=$(echo $TARGET_REPO | sed 's/[^a-zA-Z0-9]/_/g')
-        python repo_monitor.py $repo_safe
+        repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
+        python repo_monitor.py "$repo_safe"
         
     - name: Handle version update
       if: ${{ steps.check.outputs.has_update == 'true' }}
       env:
         NEW_VERSION: ${{ steps.check.outputs.new_version }}
-        REPO_SAFE: $(echo ${{ matrix.repo }} | sed 's/[^a-zA-Z0-9]/_/g')
+        TARGET_REPO: ${{ matrix.repo }}
       run: |
+        # 生成安全名称
+        repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
+        
         # 1. 更新工作区
         git fetch origin
         git reset --hard origin/main
@@ -62,32 +71,30 @@ jobs:
         
         # 2. 创建新分支（包含仓库名称）
         TIMESTAMP=$(date +%s)
-        BRANCH_NAME="update-$REPO_SAFE-$NEW_VERSION-$TIMESTAMP"
-        git checkout -b $BRANCH_NAME
+        BRANCH_NAME="update-$repo_safe-$NEW_VERSION-$TIMESTAMP"
+        git checkout -b "$BRANCH_NAME"
         
         # 3. 配置用户
         git config user.name "github-actions"
         git config user.email "actions@github.com"
         
-        # 4. 仅添加此仓库的文件
-        FILE_NAME="version_history_$REPO_SAFE.json"
-        git add "monitoring/$FILE_NAME"
-        
-        # 5. 提交更改
+        # 4. 添加和提交更改
+        FILE_NAME="monitoring/version_history_$repo_safe.json"
+        git add "$FILE_NAME"
         git commit -m "Update $TARGET_REPO to $NEW_VERSION"
         
-        # 6. 强制推送新分支（确保唯一）
-        git push origin $BRANCH_NAME --force
+        # 5. 推送新分支
+        git push origin "$BRANCH_NAME" --force
         
-        # 7. 创建 PR（确保使用个人令牌）
+        # 6. 创建 PR
         gh pr create \
           --title "Update $TARGET_REPO to $NEW_VERSION" \
           --body "Automated version update for $TARGET_REPO" \
           --base main \
-          --head $BRANCH_NAME
+          --head "$BRANCH_NAME"
         
-        # 8. 自动合并（如果设置规则允许）
-        gh pr merge $BRANCH_NAME --auto --delete-branch --merge
+        # 7. 自动合并
+        gh pr merge "$BRANCH_NAME" --auto --delete-branch --merge
         
     - name: Send email notification
       if: ${{ steps.check.outputs.has_update == 'true' }}
