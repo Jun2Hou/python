@@ -55,11 +55,12 @@ jobs:
         repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
         python repo_monitor.py "$repo_safe"
         
+    # Replace the branch validation step in the workflow file
     - name: Handle version update
       run: |
         # Ensure remote HEAD is set
         git remote set-head origin -a
-    
+        
         # Determine the default branch
         ACTUAL_BRANCH=$(git remote show origin | grep 'HEAD branch:' | awk '{print $NF}')
         if [ -z "$ACTUAL_BRANCH" ]; then
@@ -69,12 +70,8 @@ jobs:
         
         # Validate branch existence
         if ! git branch -r | grep -q "origin/$ACTUAL_BRANCH"; then
-          echo "Error: Default branch $ACTUAL_BRANCH does not exist. Falling back to 'main'."
-          ACTUAL_BRANCH="main"
-          if ! git branch -r | grep -q "origin/$ACTUAL_BRANCH"; then
-            echo "Error: Branch 'main' also does not exist."
-            exit 1
-          fi
+          echo "Error: Default branch $ACTUAL_BRANCH does not exist."
+          exit 1
         fi
         
         # Switch to the default branch
