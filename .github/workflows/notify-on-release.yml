@@ -70,7 +70,8 @@ jobs:
         
         # Validate branch existence
         if ! git branch -r | grep -q "origin/$ACTUAL_BRANCH"; then
-          echo "Error: Default branch $ACTUAL_BRANCH does not exist. Available branches are:"
+          echo "Error: Default branch $ACTUAL_BRANCH does not exist. Please set a valid default branch in your repository settings."
+          echo "Available branches are:"
           git branch -r
           exit 1
         fi
