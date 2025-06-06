@@ -8,20 +8,19 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    outputs:
-      has_update: ${{ steps.check.outputs.has_update }}
-      new_version: ${{ steps.check.outputs.new_version }}
-    
     strategy:
       matrix:
         repo: ['langgenius/dify', 'langchain-ai/langgraph-supervisor-py']
+    outputs:
+      has_update_${{ matrix.repo }}: ${{ steps.check.outputs.has_update }}
+      new_version_${{ matrix.repo }}: ${{ steps.check.outputs.new_version }}
     
     steps:
-    - name: Checkout
+    - name: Checkout with token
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        fetch-depth: 0
+        token: ${{ secrets.PERSONAL_TOKEN }}
+        fetch-depth: 0 # 获取完整历史
       
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -30,52 +29,65 @@ jobs:
         
     - name: Install dependencies
       run: |
-        pip install requests
+        pip install requests pygithub
         sudo apt-get update && sudo apt-get install -y jq
+        gh --version || sudo apt-get install -y gh
+        
+    - name: Configure GitHub CLI
+      run: |
+        gh auth login --with-token <<< "${{ secrets.PERSONAL_TOKEN }}"
+        gh config set prompt disabled
         
     - name: Check for updates
       id: check
       env:
         TARGET_REPO: ${{ matrix.repo }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: python repo_monitor.py
-      
+      run: |
+        # 生成安全的文件名
+        repo_safe=$(echo $TARGET_REPO | sed 's/[^a-zA-Z0-9]/_/g')
+        python repo_monitor.py $repo_safe
+        
     - name: Handle version update
       if: ${{ steps.check.outputs.has_update == 'true' }}
       env:
         NEW_VERSION: ${{ steps.check.outputs.new_version }}
+        REPO_SAFE: $(echo ${{ matrix.repo }} | sed 's/[^a-zA-Z0-9]/_/g')
       run: |
-        # 1. 配置用户信息
+        # 1. 更新工作区
+        git fetch origin
+        git reset --hard origin/main
+        git clean -fd
+        git pull --rebase
+        
+        # 2. 创建新分支（包含仓库名称）
+        TIMESTAMP=$(date +%s)
+        BRANCH_NAME="update-$REPO_SAFE-$NEW_VERSION-$TIMESTAMP"
+        git checkout -b $BRANCH_NAME
+        
+        # 3. 配置用户
         git config user.name "github-actions"
         git config user.email "actions@github.com"
         
-        # 2. 获取最新远程变更
-        git fetch origin
-        git pull --rebase origin main
+        # 4. 仅添加此仓库的文件
+        FILE_NAME="version_history_$REPO_SAFE.json"
+        git add "monitoring/$FILE_NAME"
         
-        # 3. 创建新分支
-        TIMESTAMP=$(date +%s)
-        BRANCH_NAME="version-update-$NEW_VERSION-$TIMESTAMP"
-        git checkout -b $BRANCH_NAME
+        # 5. 提交更改
+        git commit -m "Update $TARGET_REPO to $NEW_VERSION"
         
-        # 4. 添加和提交更改
-        git add version_history.json
-        git commit -m "Update to version $NEW_VERSION"
+        # 6. 强制推送新分支（确保唯一）
+        git push origin $BRANCH_NAME --force
         
-        # 5. 推送新分支
-        git push origin $BRANCH_NAME
+        # 7. 创建 PR（确保使用个人令牌）
+        gh pr create \
+          --title "Update $TARGET_REPO to $NEW_VERSION" \
+          --body "Automated version update for $TARGET_REPO" \
+          --base main \
+          --head $BRANCH_NAME
         
-        # 6. 创建 Pull Request
-        PR_TITLE="Update version to $NEW_VERSION"
-        PR_BODY="Automated version update from GitHub Actions"
-        gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base main --head $BRANCH_NAME
-        
-        # 7. 可选：自动合并
+        # 8. 自动合并（如果设置规则允许）
         gh pr merge $BRANCH_NAME --auto --delete-branch --merge
-        
-        # 8. 设置输出变量
-        echo "PR_BRANCH=$BRANCH_NAME" >> $GITHUB_OUTPUT
-        echo "PR_CREATED=true" >> $GITHUB_OUTPUT
         
     - name: Send email notification
       if: ${{ steps.check.outputs.has_update == 'true' }}
@@ -85,6 +97,6 @@ jobs:
         server_port: 465
         username: ${{ secrets.SMTP_USER }}
         password: ${{ secrets.SMTP_PASSWORD }}
-        subject: "New release: ${{ steps.check.outputs.new_version }}"
-        body: "A new version ${{ steps.check.outputs.new_version }} has been detected and updated in our repository."
+        subject: "New release: ${{ steps.check.outputs.new_version }} for ${{ matrix.repo }}"
+        body: "A new version ${{ steps.check.outputs.new_version }} has been released in ${{ matrix.repo }}"
         to: ${{ secrets.RECIPIENT_EMAIL }}
