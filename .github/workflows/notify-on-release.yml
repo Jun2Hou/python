@@ -56,30 +56,24 @@ jobs:
         python repo_monitor.py "$repo_safe"
         
     - name: Handle version update
-      if: ${{ steps.check.outputs.has_update == 'true' }}
-      env:
-        NEW_VERSION: ${{ steps.check.outputs.new_version }}
-        TARGET_REPO: ${{ matrix.repo }}
       run: |
-        # 生成安全名称
-        repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
-        
-        # 1. 检查远程HEAD引用是否存在
-        if ! git show-ref --quiet refs/remotes/origin/HEAD; then
-          echo "Initializing remote HEAD reference..."
-          git remote set-head origin -a
-        fi
-        
-        # Determine the actual default branch name
+        # Ensure remote HEAD is set
+        git remote set-head origin -a
+    
+        # Determine the default branch
         ACTUAL_BRANCH=$(git remote show origin | grep 'HEAD branch:' | awk '{print $NF}')
         if [ -z "$ACTUAL_BRANCH" ]; then
           echo "Failed to determine default branch. Using 'main' as fallback..."
           ACTUAL_BRANCH="main"
-        else
-          echo "Default branch detected: $ACTUAL_BRANCH"
         fi
-        
-        # Switch to the determined branch
+    
+        # Validate branch existence
+        if ! git branch -r | grep -q "origin/$ACTUAL_BRANCH"; then
+          echo "Error: Default branch $ACTUAL_BRANCH does not exist."
+          exit 1
+        fi
+    
+        # Switch to the default branch
         git checkout "$ACTUAL_BRANCH"
         if [ $? -ne 0 ]; then
           echo "Error: Failed to switch to branch $ACTUAL_BRANCH"
