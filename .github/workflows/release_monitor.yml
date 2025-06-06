@@ -1,0 +1,22 @@
+name: Webhook Triggered Update Check
+
+on:
+  repository_dispatch:
+    types: [new-release]
+
+jobs:
+  handle-update:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Process event
+      id: event
+      run: |
+        NEW_VERSION=$(jq -r '.client_payload.release.tag_name' $GITHUB_EVENT_PATH)
+        echo "::set-output name=new_version::$NEW_VERSION"
+        
+    - name: Send notification
+      uses: dawidd6/action-send-mail@v3
+      with:
+        # ...同上邮件配置
+        subject: "New release detected: ${{ steps.event.outputs.new_version }}"
+        body: "A new version ${{ steps.event.outputs.new_version }} has been released in the monitored repository!"
