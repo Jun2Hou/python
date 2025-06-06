@@ -17,5 +17,14 @@ jobs:
         && sudo apt install gh -y
     - name: Configure GitHub CLI
       run: |
-        gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+        # 安装 GitHub CLI（如果尚未安装）
+        if ! command -v gh &> /dev/null; then
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+        fi
+        
+        # 使用个人令牌登录
+        echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
         gh config set prompt disabled
