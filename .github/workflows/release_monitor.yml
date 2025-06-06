@@ -1,22 +1,55 @@
-name: Webhook Triggered Update Check
+name: External Repo Monitor
 
 on:
-  repository_dispatch:
-    types: [new-release]
+  schedule:
+    - cron: '0 */1 * * *' # 每小时一次
+  workflow_dispatch: # 手动触发按钮
 
 jobs:
-  handle-update:
+  monitor:
     runs-on: ubuntu-latest
+    outputs:
+      has_update: ${{ steps.check.outputs.has_update }}
+      new_version: ${{ steps.check.outputs.new_version }}
+      release_body: ${{ steps.check.outputs.release_body }}
+    
     steps:
-    - name: Process event
-      id: event
-      run: |
-        NEW_VERSION=$(jq -r '.client_payload.release.tag_name' $GITHUB_EVENT_PATH)
-        echo "::set-output name=new_version::$NEW_VERSION"
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
         
-    - name: Send notification
+    - name: Install dependencies
+      run: pip install requests
+        
+    - name: Check for updates
+      id: check
+      env:
+        TARGET_REPO: ${{ secrets.TARGET_REPO }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: python repo_monitor.py
+      
+    - name: Update current version
+      run: |
+        if [ -f version_history.json ]; then
+          git config user.name 'github-actions'
+          git config user.email 'actions@github.com'
+          git add version_history.json
+          git commit -m "Update current version"
+          git push
+        fi
+        
+    - name: Send email notification
+      if: ${{ steps.monitor.outputs.has_update == 'true' }}
       uses: dawidd6/action-send-mail@v3
       with:
-        # ...同上邮件配置
-        subject: "New release detected: ${{ steps.event.outputs.new_version }}"
-        body: "A new version ${{ steps.event.outputs.new_version }} has been released in the monitored repository!"
+        server_address: ${{ secrets.SMTP_SERVER }}
+        server_port: 465
+        username: ${{ secrets.SMTP_USER }}
+        password: ${{ secrets.SMTP_PASSWORD }}
+        subject: "New release: ${{ steps.monitor.outputs.new_version }}"
+        html_body: ${{ steps.monitor.outputs.release_body }}
+        to: ${{ secrets.RECIPIENT_EMAIL }}
