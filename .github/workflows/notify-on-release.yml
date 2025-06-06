@@ -131,4 +131,5 @@ jobs:
         password: ${{ secrets.SMTP_PASSWORD }}
         subject: "New release: ${{ steps.check.outputs.new_version }} for ${{ matrix.repo }}"
         body: "A new version ${{ steps.check.outputs.new_version }} has been released in ${{ matrix.repo }}"
+        from: "Github Action Monitoring"
         to: ${{ secrets.RECIPIENT_EMAIL }}
