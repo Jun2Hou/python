@@ -17,7 +17,7 @@ jobs:
     - name: Checkout with token
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.PERSONAL_TOKEN }}
+        token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0 # 获取完整历史
       
     - name: Setup Python
@@ -41,7 +41,7 @@ jobs:
         fi
         
         # 使用个人令牌登录
-        echo ${{ secrets.PERSONAL_TOKEN }} | gh auth login --with-token
+        echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
         gh config set prompt disabled
         
     - name: Check for updates
