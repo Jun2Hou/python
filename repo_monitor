@@ -46,12 +46,24 @@ def update_version(version):
         json.dump(history, f, indent=2)
 
 def send_notification(new_version, release_info):
-    """发送通知（在此示例中设置为输出，实际应发送邮件）"""
-    print(f"::set-output name=has_update::true")
-    print(f"::set-output name=new_version::{new_version}")
+    """生成详细的邮件通知内容"""
+    subject = f"New Release: {new_version} for {target_repo}"
     
-    # 在实际项目中，这里应该调用邮件发送API
-    print(f"New version detected: {new_version}")
+    body = f"""
+    <h2>New Release Detected: {new_version}</h2>
+    <p>Repository: {target_repo}</p>
+    <p>Release Name: {release_info.get('name', '')}</p>
+    <p>Published at: {release_info['published_at']}</p>
+    <p>Author: {release_info['author']['login']}</p>
+    <hr>
+    <h3>Release Notes:</h3>
+    <div>{release_info.get('body', 'No release notes provided')}</div>
+    <hr>
+    <p><a href="{release_info['html_url']}">View on GitHub</a></p>
+    """
+    
+    # 在实际项目中发送包含HTML格式的邮件
+    print(f"::set-output name=release_body::{json.dumps(body)}")
 
 def main():
     # 获取当前存储的版本
