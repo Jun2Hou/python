@@ -11,7 +11,6 @@ jobs:
     outputs:
       has_update: ${{ steps.check.outputs.has_update }}
       new_version: ${{ steps.check.outputs.new_version }}
-      release_body: ${{ steps.check.outputs.release_body }}
     
     strategy:
       matrix:
@@ -30,7 +29,9 @@ jobs:
         python-version: '3.11'
         
     - name: Install dependencies
-      run: pip install requests
+      run: |
+        pip install requests
+        sudo apt-get update && sudo apt-get install -y jq
         
     - name: Check for updates
       id: check
@@ -39,28 +40,42 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python repo_monitor.py
       
-    - name: Update and push version history
+    - name: Handle version update
       if: ${{ steps.check.outputs.has_update == 'true' }}
       env:
         NEW_VERSION: ${{ steps.check.outputs.new_version }}
       run: |
-        # 添加文件到暂存区
-        git add version_history.json
-        
-        # 创建独立分支避免冲突
-        BRANCH_NAME="version-update-$(date +%s)"
-        git checkout -b $BRANCH_NAME
-        
-        # 配置用户信息
+        # 1. 配置用户信息
         git config user.name "github-actions"
         git config user.email "actions@github.com"
         
-        # 提交更改
-        git commit -m "Update current version to $NEW_VERSION"
+        # 2. 获取最新远程变更
+        git fetch origin
+        git pull --rebase origin main
         
-        # 推送新分支并创建Pull Request
+        # 3. 创建新分支
+        TIMESTAMP=$(date +%s)
+        BRANCH_NAME="version-update-$NEW_VERSION-$TIMESTAMP"
+        git checkout -b $BRANCH_NAME
+        
+        # 4. 添加和提交更改
+        git add version_history.json
+        git commit -m "Update to version $NEW_VERSION"
+        
+        # 5. 推送新分支
         git push origin $BRANCH_NAME
-        gh pr create --title "Update version to $NEW_VERSION" --body "Automated version update" --base main
+        
+        # 6. 创建 Pull Request
+        PR_TITLE="Update version to $NEW_VERSION"
+        PR_BODY="Automated version update from GitHub Actions"
+        gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base main --head $BRANCH_NAME
+        
+        # 7. 可选：自动合并
+        gh pr merge $BRANCH_NAME --auto --delete-branch --merge
+        
+        # 8. 设置输出变量
+        echo "PR_BRANCH=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        echo "PR_CREATED=true" >> $GITHUB_OUTPUT
         
     - name: Send email notification
       if: ${{ steps.check.outputs.has_update == 'true' }}
@@ -71,5 +86,5 @@ jobs:
         username: ${{ secrets.SMTP_USER }}
         password: ${{ secrets.SMTP_PASSWORD }}
         subject: "New release: ${{ steps.check.outputs.new_version }}"
-        body: "A new version ${{ steps.check.outputs.new_version }} has been released in the monitored repository: ${{ secrets.TARGET_REPO }}"
+        body: "A new version ${{ steps.check.outputs.new_version }} has been detected and updated in our repository."
         to: ${{ secrets.RECIPIENT_EMAIL }}
