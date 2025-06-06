@@ -20,6 +20,9 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
       
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -36,24 +39,37 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python repo_monitor.py
       
-    - name: Update current version
+    - name: Update and push version history
+      if: ${{ steps.check.outputs.has_update == 'true' }}
+      env:
+        NEW_VERSION: ${{ steps.check.outputs.new_version }}
       run: |
-        if [ -f version_history.json ]; then
-          git config user.name 'github-actions'
-          git config user.email 'actions@github.com'
-          git add version_history.json
-          git commit -m "Update current version"
-          git push
-        fi
+        # 添加文件到暂存区
+        git add version_history.json
+        
+        # 创建独立分支避免冲突
+        BRANCH_NAME="version-update-$(date +%s)"
+        git checkout -b $BRANCH_NAME
+        
+        # 配置用户信息
+        git config user.name "github-actions"
+        git config user.email "actions@github.com"
+        
+        # 提交更改
+        git commit -m "Update current version to $NEW_VERSION"
+        
+        # 推送新分支并创建Pull Request
+        git push origin $BRANCH_NAME
+        gh pr create --title "Update version to $NEW_VERSION" --body "Automated version update" --base main
         
     - name: Send email notification
-      if: ${{ steps.monitor.outputs.has_update == 'true' }}
+      if: ${{ steps.check.outputs.has_update == 'true' }}
       uses: dawidd6/action-send-mail@v3
       with:
         server_address: ${{ secrets.SMTP_SERVER }}
         server_port: 465
         username: ${{ secrets.SMTP_USER }}
         password: ${{ secrets.SMTP_PASSWORD }}
-        subject: "New release: ${{ steps.monitor.outputs.new_version }}"
-        html_body: ${{ steps.monitor.outputs.release_body }}
+        subject: "New release: ${{ steps.check.outputs.new_version }}"
+        body: "A new version ${{ steps.check.outputs.new_version }} has been released in the monitored repository: ${{ secrets.TARGET_REPO }}"
         to: ${{ secrets.RECIPIENT_EMAIL }}
