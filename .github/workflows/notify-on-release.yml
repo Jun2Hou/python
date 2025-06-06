@@ -13,6 +13,10 @@ jobs:
       new_version: ${{ steps.check.outputs.new_version }}
       release_body: ${{ steps.check.outputs.release_body }}
     
+    strategy:
+      matrix:
+        repo: ['langgenius/dify', 'langchain-ai/langgraph-supervisor-py']
+    
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -20,7 +24,7 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.11'
         
     - name: Install dependencies
       run: pip install requests
@@ -28,8 +32,8 @@ jobs:
     - name: Check for updates
       id: check
       env:
-        TARGET_REPO: ${{ secrets.TARGET_REPO }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TARGET_REPO: ${{ matrix.repo }}
+        GITHUB_TOKEN: ${{ email_secrets.GITHUB_TOKEN }}
       run: python repo_monitor.py
       
     - name: Update current version
@@ -46,10 +50,10 @@ jobs:
       if: ${{ steps.monitor.outputs.has_update == 'true' }}
       uses: dawidd6/action-send-mail@v3
       with:
-        server_address: ${{ secrets.SMTP_SERVER }}
+        server_address: ${{ email_secrets.SMTP_SERVER }}
         server_port: 465
-        username: ${{ secrets.SMTP_USER }}
-        password: ${{ secrets.SMTP_PASSWORD }}
+        username: ${{ email_secrets.SMTP_USER }}
+        password: ${{ email_secrets.SMTP_PASSWORD }}
         subject: "New release: ${{ steps.monitor.outputs.new_version }}"
         html_body: ${{ steps.monitor.outputs.release_body }}
-        to: ${{ secrets.RECIPIENT_EMAIL }}
+        to: ${{ email_secrets.RECIPIENT_EMAIL }}
