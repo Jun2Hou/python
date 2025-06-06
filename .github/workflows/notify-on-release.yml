@@ -60,17 +60,17 @@ jobs:
         # Ensure remote HEAD is set
         git remote set-head origin -a
     
-        # Determine the default branch
         ACTUAL_BRANCH=$(git remote show origin | grep 'HEAD branch:' | awk '{print $NF}')
         if [ -z "$ACTUAL_BRANCH" ]; then
           echo "Failed to determine default branch. Using 'main' as fallback..."
           ACTUAL_BRANCH="main"
         fi
-    
-        # Validate branch existence
+        
+        # Validate branch existence and fallback to 'main' if not found
         if ! git branch -r | grep -q "origin/$ACTUAL_BRANCH"; then
-          echo "Error: Default branch $ACTUAL_BRANCH does not exist."
-          exit 1
+          echo "Error: Default branch $ACTUAL_BRANCH does not exist. Falling back to 'main'."
+          ACTUAL_BRANCH="main"
+          git branch -r | grep -q "origin/$ACTUAL_BRANCH" || { echo "Error: Branch 'main' also does not exist."; exit 1; }
         fi
     
         # Switch to the default branch
@@ -96,6 +96,12 @@ jobs:
         
         # 6. 添加和提交更改
         FILE_NAME="version_history_$repo_safe.json"
+        if [ ! -f "$FILE_NAME" ]; then
+          echo "Creating missing file: $FILE_NAME"
+          echo "{}" > "$FILE_NAME" # Initialize with an empty JSON
+        fi
+        
+        # Add and commit the file
         git add "$FILE_NAME"
         git commit -m "Update $TARGET_REPO to $NEW_VERSION"
         
