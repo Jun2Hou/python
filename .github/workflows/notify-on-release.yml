@@ -33,7 +33,7 @@ jobs:
       id: check
       env:
         TARGET_REPO: ${{ matrix.repo }}
-        GITHUB_TOKEN: ${{ email_secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: python repo_monitor.py
       
     - name: Update current version
@@ -50,10 +50,10 @@ jobs:
       if: ${{ steps.monitor.outputs.has_update == 'true' }}
       uses: dawidd6/action-send-mail@v3
       with:
-        server_address: ${{ email_secrets.SMTP_SERVER }}
+        server_address: ${{ secrets.SMTP_SERVER }}
         server_port: 465
-        username: ${{ email_secrets.SMTP_USER }}
-        password: ${{ email_secrets.SMTP_PASSWORD }}
+        username: ${{ secrets.SMTP_USER }}
+        password: ${{ secrets.SMTP_PASSWORD }}
         subject: "New release: ${{ steps.monitor.outputs.new_version }}"
         html_body: ${{ steps.monitor.outputs.release_body }}
-        to: ${{ email_secrets.RECIPIENT_EMAIL }}
+        to: ${{ secrets.RECIPIENT_EMAIL }}
