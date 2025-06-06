@@ -29,19 +29,20 @@ jobs:
       run: |
         pip install requests pygithub
         sudo apt-get update && sudo apt-get install -y jq
+        sudo apt-get install -y git-extras  # 安装有用的Git扩展
         
     - name: Configure GitHub CLI
       run: |
-        # 安装 GitHub CLI（如果尚未安装）
-        if ! command -v gh &> /dev/null; then
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-          sudo apt update
-          sudo apt install gh -y
-        fi
+        # 安装 GitHub CLI
+        type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install gh -y
         
         # 使用个人令牌登录
-        echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
+        echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
         gh config set prompt disabled
         
     - name: Check for updates
@@ -63,37 +64,55 @@ jobs:
         # 生成安全名称
         repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
         
-        # 1. 更新工作区
-        git fetch origin
-        git reset --hard origin/main
-        git clean -fd
-        git pull --rebase
+        # 1. 检查远程HEAD引用是否存在
+        if ! git show-ref --quiet refs/remotes/origin/HEAD; then
+          echo "Initializing remote HEAD reference..."
+          git remote set-head origin -a
+        fi
         
-        # 2. 创建新分支（包含仓库名称）
+        # 2. 确定实际分支名称
+        ACTUAL_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+        if [ -z "$ACTUAL_BRANCH" ]; then
+          # 回退机制
+          echo "Failed to determine default branch, using fallback..."
+          ACTUAL_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)
+          if [ -z "$ACTUAL_BRANCH" ]; then
+            ACTUAL_BRANCH="main"
+          fi
+        fi
+        
+        echo "Using branch: $ACTUAL_BRANCH"
+        
+        # 3. 更新工作区
+        git fetch --all
+        git reset --hard origin/$ACTUAL_BRANCH
+        git clean -fd
+        
+        # 4. 创建新分支
         TIMESTAMP=$(date +%s)
         BRANCH_NAME="update-$repo_safe-$NEW_VERSION-$TIMESTAMP"
         git checkout -b "$BRANCH_NAME"
         
-        # 3. 配置用户
+        # 5. 配置用户
         git config user.name "github-actions"
         git config user.email "actions@github.com"
         
-        # 4. 添加和提交更改
+        # 6. 添加和提交更改
         FILE_NAME="monitoring/version_history_$repo_safe.json"
         git add "$FILE_NAME"
         git commit -m "Update $TARGET_REPO to $NEW_VERSION"
         
-        # 5. 推送新分支
+        # 7. 推送新分支
         git push origin "$BRANCH_NAME" --force
         
-        # 6. 创建 PR
+        # 8. 创建 PR
         gh pr create \
           --title "Update $TARGET_REPO to $NEW_VERSION" \
           --body "Automated version update for $TARGET_REPO" \
-          --base main \
+          --base $ACTUAL_BRANCH \
           --head "$BRANCH_NAME"
         
-        # 7. 自动合并
+        # 9. 自动合并
         gh pr merge "$BRANCH_NAME" --auto --delete-branch --merge
         
     - name: Send email notification
