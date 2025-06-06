@@ -53,72 +53,93 @@ jobs:
       run: |
         # 生成安全的文件名
         repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
-        python repo_monitor.py "$repo_safe"
+        new_version=$(python repo_monitor.py "$repo_safe")
+        # 输出变量供后续步骤使用
+        echo "repo_safe=$repo_safe" >> $GITHUB_OUTPUT
+        echo "new_version=$new_version" >> $GITHUB_OUTPUT
+        # 如果有新版本，设置has_update为true
+        if [ -n "$new_version" ]; then
+          echo "has_update=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_update=false" >> $GITHUB_OUTPUT
+        fi
         
-    # Replace the branch validation step in the workflow file
+    # 更新后的版本处理步骤
     - name: Handle version update
+      if: ${{ steps.check.outputs.has_update == 'true' }}
+      env:
+        TARGET_REPO: ${{ matrix.repo }}
+        NEW_VERSION: ${{ steps.check.outputs.new_version }}
+        repo_safe: ${{ steps.check.outputs.repo_safe }}
       run: |
-        # Ensure remote HEAD is set
+        # 确保远程HEAD设置
         git remote set-head origin -a
         
-        # Determine the default branch
+        # 确定默认分支
         ACTUAL_BRANCH=$(git remote show origin | grep 'HEAD branch:' | awk '{print $NF}')
         if [ -z "$ACTUAL_BRANCH" ]; then
-          echo "Failed to determine default branch. Using 'main' as fallback..."
+          echo "无法确定默认分支，使用'main'作为后备方案..."
           ACTUAL_BRANCH="main"
         fi
         
-        # Validate branch existence
+        # 验证分支存在
         if ! git branch -r | grep -q "origin/$ACTUAL_BRANCH"; then
-          echo "Error: Default branch $ACTUAL_BRANCH does not exist. Please set a valid default branch in your repository settings."
-          echo "Available branches are:"
+          echo "错误：默认分支 $ACTUAL_BRANCH 不存在"
+          echo "可用分支："
           git branch -r
           exit 1
         fi
         
-        # Switch to the default branch
-        if ! git checkout "$ACTUAL_BRANCH"; then
-          echo "Error: Failed to switch to branch $ACTUAL_BRANCH"
-          exit 1
-        fi
-        
-        # 3. 更新工作区
+        # 切换到默认分支并更新
+        git checkout "$ACTUAL_BRANCH"
         git fetch --all
-        git reset --hard origin/$ACTUAL_BRANCH
+        git reset --hard "origin/$ACTUAL_BRANCH"
         git clean -fd
         
-        # 4. 创建新分支
+        # 创建新分支
         TIMESTAMP=$(date +%s)
         BRANCH_NAME="update-$repo_safe-$NEW_VERSION-$TIMESTAMP"
         git checkout -b "$BRANCH_NAME"
         
-        # 5. 配置用户
+        # 配置Git用户
         git config user.name "github-actions"
         git config user.email "actions@github.com"
         
-        # 6. 添加和提交更改
+        # 准备版本历史文件
         FILE_NAME="version_history_$repo_safe.json"
         if [ ! -f "$FILE_NAME" ]; then
-          echo "Creating missing file: $FILE_NAME"
-          echo "{}" > "$FILE_NAME" # Initialize with an empty JSON
+          echo "初始化 $FILE_NAME..."
+          echo "{}" > "$FILE_NAME"
         fi
         
-        # Add and commit the file
-        git add "$FILE_NAME"
-        git commit -m "Update $TARGET_REPO to $NEW_VERSION"
+        # === 关键更新 === 实际更新文件内容
+        echo "更新 $FILE_NAME 到新版本 $NEW_VERSION..."
+        # 使用jq更新JSON文件
+        jq --arg ver "$NEW_VERSION" --arg ts "$TIMESTAMP" \
+           '.version = $ver | .timestamp = ($ts | tonumber)' \
+           "$FILE_NAME" > tmp.json && mv tmp.json "$FILE_NAME"
         
-        # 7. 推送新分支
-        git push origin "$BRANCH_NAME" --force
-        
-        # 8. 创建 PR
-        gh pr create \
-          --title "Update $TARGET_REPO to $NEW_VERSION" \
-          --body "Automated version update for $TARGET_REPO" \
-          --base $ACTUAL_BRANCH \
-          --head "$BRANCH_NAME"
-        
-        # 9. 自动合并
-        gh pr merge "$BRANCH_NAME" --auto --delete-branch --merge
+        # 检查是否有变更需要提交
+        if git diff --quiet; then
+          echo "警告：版本文件内容未改变，跳过提交"
+        else
+          # 添加并提交变更
+          git add "$FILE_NAME"
+          git commit -m "更新 $TARGET_REPO 到 $NEW_VERSION"
+          
+          # 推送分支
+          git push origin "$BRANCH_NAME" --force
+          
+          # 创建PR
+          gh pr create \
+            --title "更新 $TARGET_REPO 到 $NEW_VERSION" \
+            --body "自动化版本更新" \
+            --base $ACTUAL_BRANCH \
+            --head "$BRANCH_NAME"
+          
+          # 自动合并PR
+          gh pr merge "$BRANCH_NAME" --auto --delete-branch --merge
+        fi
         
     - name: Send email notification
       if: ${{ steps.check.outputs.has_update == 'true' }}
