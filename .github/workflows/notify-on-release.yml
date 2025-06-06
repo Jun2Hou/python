@@ -72,13 +72,19 @@ jobs:
         
         # Determine the actual default branch name
         ACTUAL_BRANCH=$(git remote show origin | grep 'HEAD branch:' | awk '{print $NF}')
-        
         if [ -z "$ACTUAL_BRANCH" ]; then
           echo "Failed to determine default branch. Using 'main' as fallback..."
           ACTUAL_BRANCH="main"
+        else
+          echo "Default branch detected: $ACTUAL_BRANCH"
         fi
         
-        echo "Default branch determined: $ACTUAL_BRANCH"
+        # Switch to the determined branch
+        git checkout "$ACTUAL_BRANCH"
+        if [ $? -ne 0 ]; then
+          echo "Error: Failed to switch to branch $ACTUAL_BRANCH"
+          exit 1
+        fi
         
         # 3. 更新工作区
         git fetch --all
