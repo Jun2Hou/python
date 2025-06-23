@@ -19,7 +19,6 @@ else:
 # target_repo = os.environ['TARGET_REPO']
 target_repo = sys.argv[1]
 token = os.environ.get('GITHUB_TOKEN')
-token = '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'
 # print('-----')
 print('-----' + target_repo)
 
