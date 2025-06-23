@@ -19,8 +19,9 @@ else:
 # target_repo = os.environ['TARGET_REPO']
 target_repo = sys.argv[1]
 token = os.environ.get('GITHUB_TOKEN')
+token = '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'
 # print('-----')
-print(target_repo)
+print('-----' + target_repo)
 
 # 版本文件路径
 VERSION_FILE = f"version_history_{safe_repo_name.replace('/', '_')}.json"
@@ -114,6 +115,7 @@ def main():
         cleaned_version = latest_version[1:]
     else:
         cleaned_version = latest_version
+    print('----'+latest_version)
     
     # 验证版本号格式
     if not re.match(r'^\d+\.\d+\.\d+$', cleaned_version):
