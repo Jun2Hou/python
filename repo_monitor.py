@@ -17,7 +17,7 @@ else:
     safe_repo_name = "default"
     
 # target_repo = os.environ['TARGET_REPO']
-target_repo = sys.argv[1]
+target_repo = sys.argv[1].replace('_', '/')
 token = os.environ.get('GITHUB_TOKEN')
 # print('-----')
 print('-----' + target_repo)
