@@ -16,9 +16,10 @@ if len(sys.argv) > 1:
 else:
     safe_repo_name = "default"
     
-target_repo = os.environ['TARGET_REPO']
+# target_repo = os.environ['TARGET_REPO']
 target_repo = sys.argv[1]
 token = os.environ.get('GITHUB_TOKEN')
+# print('-----')
 print(target_repo)
 
 # 版本文件路径
