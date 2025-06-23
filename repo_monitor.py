@@ -17,10 +17,12 @@ else:
     safe_repo_name = "default"
     
 target_repo = os.environ['TARGET_REPO']
+target_repo = sys.argv[1]
 token = os.environ.get('GITHUB_TOKEN')
+print(target_repo)
 
 # 版本文件路径
-VERSION_FILE = f"version_history_{safe_repo_name}.json"
+VERSION_FILE = f"version_history_{safe_repo_name.replace('/', '_')}.json"
 
 def get_latest_release():
     """获取目标仓库的最新发布版本"""
