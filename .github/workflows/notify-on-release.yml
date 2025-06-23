@@ -55,8 +55,8 @@ jobs:
         # 生成安全的文件名
         repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
         # repo_safe=$(echo "$TARGET_REPO")
-        echo "$TARGET_REPO"
-        echo "$repo_safe"
+        echo "$TARGET_REPO" >> $GITHUB_OUTPUT
+        echo "$repo_safe" >> $GITHUB_OUTPUT
         
         # 调用监控脚本 - 只捕获标准输出（忽略标准错误）
         new_version=$(python repo_monitor.py "$repo_safe" 2>/dev/null)
