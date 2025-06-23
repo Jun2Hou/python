@@ -113,7 +113,6 @@ def main():
         cleaned_version = latest_version[1:]
     else:
         cleaned_version = latest_version
-    print('----'+latest_version)
     
     # 验证版本号格式
     if not re.match(r'^\d+\.\d+\.\d+$', cleaned_version):
