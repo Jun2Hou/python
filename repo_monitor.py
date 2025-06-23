@@ -19,6 +19,7 @@ else:
 # target_repo = os.environ['TARGET_REPO']
 target_repo = sys.argv[1].replace('_', '/')
 token = os.environ.get('GITHUB_TOKEN')
+print(token)
 print(target_repo)
 
 # 版本文件路径
@@ -113,6 +114,7 @@ def main():
         cleaned_version = latest_version[1:]
     else:
         cleaned_version = latest_version
+    print(cleaned_version)
     
     # 验证版本号格式
     if not re.match(r'^\d+\.\d+\.\d+$', cleaned_version):
