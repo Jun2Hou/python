@@ -25,6 +25,24 @@ print(target_repo)
 # 版本文件路径
 VERSION_FILE = f"version_history_{safe_repo_name.replace('/', '_')}.json"
 
+def extract_version(input_str):
+    """
+    从输入字符串中提取只包含数字和小数点的版本号
+    
+    参数:
+    input_str -- 输入的原始字符串
+    
+    返回:
+    过滤后只包含数字和小数点的字符串
+    """
+    # 使用正则表达式移除所有非数字和非小数点的字符
+    # [0-9] 匹配所有数字
+    # \. 匹配小数点（特殊字符需要转义）
+    # | 表示"或"关系
+    # re.S 标志使 . 匹配包括换行符在内的所有字符
+    cleaned = re.sub(r'[^0-9\.]', '', input_str, flags=re.S)
+    return cleaned
+
 def get_latest_release():
     """获取目标仓库的最新发布版本"""
     url = f"https://api.github.com/repos/{target_repo}/releases/latest"
@@ -108,6 +126,7 @@ def main():
         return ""
     
     latest_version = latest_release['tag_name']
+    latest_version = extract_version(latest_version)
     
     # 标准化版本号格式
     if latest_version.startswith('v'):
