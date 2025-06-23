@@ -53,8 +53,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         # 生成安全的文件名
-        repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
-        # repo_safe=$(echo "$TARGET_REPO")
+        # repo_safe=$(echo "$TARGET_REPO" | sed 's/[^a-zA-Z0-9]/_/g')
+        repo_safe=$(echo "$TARGET_REPO")
         echo "TARGET_REPO=$TARGET_REPO" >> $GITHUB_OUTPUT
         echo "repo_safe=$repo_safe" >> $GITHUB_OUTPUT
         
