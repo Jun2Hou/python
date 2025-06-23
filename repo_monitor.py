@@ -123,6 +123,7 @@ def main():
         if update_version(cleaned_version, latest_release):
             # 成功更新时输出标准化的版本号
             print(cleaned_version)
+            return cleaned_version
         else:
             # 文件更新失败时输出空字符串
             return ""
